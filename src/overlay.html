@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindVoice Overlay</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        .overlay-container {
+            position: relative;
+            width: 340px;
+            height: 80px;
+            pointer-events: auto;
+
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(40px) saturate(200%) contrast(1.1);
+            -webkit-backdrop-filter: blur(40px) saturate(200%) contrast(1.1);
+            filter: saturate(1.1);
+
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow:
+                0 4px 15px rgba(0, 0, 0, 0.06),
+                0 1px 4px rgba(0, 0, 0, 0.03);
+
+            display: flex;
+            flex-direction: column;
+            padding: 12px 20px;
+            gap: 4px;
+
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        /* Top Row: Icon + Text */
+        .header-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            height: 100%;
+            /* Fill container */
+            position: relative;
+            z-index: 10;
+            /* Above visualizer */
+            pointer-events: none;
+            /* Let clicks pass through if needed, but text selection blocked by user-select:none anyway */
+            top: -20px;
+            /* Move up slightly */
+        }
+
+        .app-icon {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, #ff4d4d, #f9cb28);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 2px 8px rgba(255, 77, 77, 0.3);
+        }
+
+        .app-icon svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        .text-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            line-height: 1.2;
+        }
+
+        .app-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #333;
+            letter-spacing: -0.3px;
+        }
+
+        .status-text {
+            font-size: 11px;
+            font-weight: 500;
+            color: #888;
+            letter-spacing: 0.2px;
+            white-space: nowrap;
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Visualizer: Absolute & Centered */
+        .visualizer-row {
+            position: absolute;
+            top: 15px;
+            /* Move down slightly */
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            /* Behind text */
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            /* Opacity can be controlled here or in JS */
+        }
+
+        /* States via classes on container */
+        .overlay-container.recording .status-text {
+            color: #ef4444;
+            /* Red text for recording */
+        }
+
+        .overlay-container.processing .status-text {
+            color: #f59e0b;
+        }
+
+        .overlay-container.error {
+            border-color: rgba(239, 68, 68, 0.3);
+            background: rgba(255, 245, 245, 0.9);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="overlay-container" id="container">
+        <div class="header-row">
+            <div class="app-icon">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="22"></line>
+                </svg>
+            </div>
+            <div class="text-content">
+                <span class="app-name">MindVoice</span>
+                <span class="status-text" id="messageText">Ready</span>
+            </div>
+        </div>
+        <div class="visualizer-row">
+            <canvas id="visualizer"></canvas>
+        </div>
+    </div>
+
+    <script src="overlay.js"></script>
+</body>
+
+</html>

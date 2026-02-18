@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindVoice</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="app-logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                        class="feather feather-mic">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                    </svg>
+                </div>
+                <h1 class="app-title">MindVoice</h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-tab="general">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                        </path>
+                    </svg>
+                    <span>通用设置</span>
+                </button>
+
+                <button class="nav-item" data-tab="api">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+                    </svg>
+                    <span>API设置</span>
+                </button>
+
+                <button class="nav-item" data-tab="hotkey">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect>
+                        <line x1="6" y1="12" x2="6" y2="12"></line>
+                        <line x1="10" y1="12" x2="10" y2="12"></line>
+                        <line x1="14" y1="12" x2="14" y2="12"></line>
+                        <line x1="18" y1="12" x2="18" y2="12"></line>
+                        <line x1="6" y1="16" x2="6" y2="16"></line>
+                        <line x1="10" y1="16" x2="10" y2="16"></line>
+                        <line x1="14" y1="16" x2="18" y2="16"></line>
+                        <line x1="6" y1="8" x2="10" y2="8"></line>
+                        <line x1="14" y1="8" x2="18" y2="8"></line>
+                    </svg>
+                    <span>快捷键</span>
+                </button>
+
+                <button class="nav-item" data-tab="console">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="4 17 10 11 4 5"></polyline>
+                        <line x1="12" y1="19" x2="20" y2="19"></line>
+                    </svg>
+                    <span>控制台</span>
+                </button>
+
+                <div class="spacer"></div>
+
+                <button class="nav-item" data-tab="about">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    <span>关于</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- General Tab -->
+            <section id="general" class="content-panel active">
+                <header>
+                    <h2>通用设置</h2>
+                    <p class="subtitle">自定义应用的基础行为</p>
+                </header>
+
+                <div class="card">
+                    <div class="setting-row">
+                        <div class="setting-info">
+                            <label for="language">界面与识别语言</label>
+                            <div class="description">主要用于 API 识别时的语言提示</div>
+                        </div>
+                        <div class="setting-control">
+                            <select id="language" class="modern-select">
+                                <option value="auto">自动检测 (Auto)</option>
+                                <option value="zh">中文 (Chinese)</option>
+                                <option value="en">English</option>
+                                <option value="ja">日本語 (Japanese)</option>
+                                <option value="ko">한국어 (Korean)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="separator"></div>
+
+                    <div class="setting-row">
+                        <div class="setting-info">
+                            <label for="autoPaste">转录后自动粘贴</label>
+                            <div class="description">转录完成后自动模拟 Ctrl+V 粘贴</div>
+                        </div>
+                        <div class="setting-control">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="autoPaste">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="separator"></div>
+
+                    <div class="setting-row">
+                        <div class="setting-info">
+                            <label for="vadThreshold">语音检测灵敏度</label>
+                            <div class="description">数值越低越灵敏，环境嘈杂时调高</div>
+                        </div>
+                        <div class="setting-control">
+                            <div class="slider-container">
+                                <input type="range" id="vadThreshold" min="5" max="100" value="30"
+                                    class="modern-slider">
+                                <span id="vadThresholdValue" class="slider-value">30</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="separator"></div>
+
+                    <div class="setting-row">
+                        <div class="setting-info">
+                            <label for="prompt">识别提示词</label>
+                            <div class="description">帮助AI理解专业术语，如"二力杆"等，提高识别准确率</div>
+                        </div>
+                        <div class="setting-control full-width">
+                            <textarea id="prompt" class="modern-textarea" rows="3"
+                                placeholder="例如：机械工程基础，二力杆，受力分析，力矩..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- API Tab -->
+            <section id="api" class="content-panel">
+                <header>
+                    <h2>API 配置</h2>
+                    <p class="subtitle">连接到你选择的 AI转录服务</p>
+                </header>
+
+                <div class="card">
+                    <div class="form-group">
+                        <label for="apiProvider">服务提供商</label>
+                        <select id="apiProvider" class="modern-select full-width">
+                            <option value="local">本地模型 (内置服务)</option>
+                            <option value="vllm">vLLM 服务 (外部)</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="groq">Groq (推荐/速度快)</option>
+                            <option value="custom">自定义 (Custom)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="localModelGroup">
+                        <label for="localModel">本地模型选择</label>
+                        <select id="localModel" class="modern-select full-width">
+                            <option value="qwen">Qwen3-ASR-0.6B (轻量级, 0.6B参数)</option>
+                            <option value="voxtral">Voxtral-Mini-4B-Realtime (实时, 4B参数)</option>
+                        </select>
+                        <div class="hint-text">切换模型后需要重启服务才能生效</div>
+                    </div>
+
+                    <div class="form-group" id="vllmUrlGroup" style="display: none;">
+                        <label for="vllmUrl">vLLM 服务地址</label>
+                        <input type="text" id="vllmUrl" placeholder="http://localhost:8000" class="modern-input">
+                        <div class="hint-text">vLLM 服务器的地址，需在外部手动启动 (如 WSL 中运行 qwen-asr-serve)</div>
+                    </div>
+
+                    <div class="form-group" id="apiKeyGroup">
+                        <label for="apiKey">API Key (令牌)</label>
+                        <div class="input-wrapper">
+                            <input type="password" id="apiKey" placeholder="sk-..." class="modern-input">
+                            <button class="icon-btn toggle-visibility" type="button">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="baseUrlGroup" style="display: none;">
+                        <label for="baseUrl">Base URL</label>
+                        <input type="text" id="baseUrl" placeholder="https://api.example.com/v1/audio/transcriptions"
+                            class="modern-input">
+                    </div>
+
+                    <div class="form-group" id="modelGroup">
+                        <label for="model">模型名称</label>
+                        <input type="text" id="model" placeholder="whisper-1" class="modern-input">
+                        <div class="hint-text">推荐: whisper-1, whisper-large-v3, distil-whisper-large-v3-en</div>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button id="saveApiBtn" class="btn btn-primary">保存并应用</button>
+                    <button id="testBtn" class="btn btn-secondary">
+                        <span class="btn-text">测试连接</span>
+                        <div class="spinner"></div>
+                    </button>
+                </div>
+
+                <div id="saveApiStatus" class="status-banner" style="display: none; margin-top: 10px;"></div>
+                <div id="testResult" class="status-banner"></div>
+            </section>
+
+            <!-- Hotkey Tab -->
+            <section id="hotkey" class="content-panel">
+                <header>
+                    <h2>快捷键</h2>
+                    <p class="subtitle">设置用于开始和停止录音的全局热键</p>
+                </header>
+
+                <div class="card center-content">
+                    <div class="hotkey-display-large" id="hotkeyDisplay">Alt+Space</div>
+                    <p class="instruction">按下快捷键开始录音，再次按下停止并转录</p>
+
+                    <div class="hotkey-recorder">
+                        <label for="customHotkey">自定义快捷键</label>
+                        <div class="recorder-input-group">
+                            <input type="text" id="customHotkey" placeholder="例如: Ctrl+Shift+R" readonly
+                                class="modern-input text-center">
+                            <button id="recordHotkeyBtn" class="btn btn-secondary">录制新快捷键</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Console Tab -->
+            <section id="console" class="content-panel">
+                <header>
+                    <h2>控制台</h2>
+                    <p class="subtitle">查看应用运行日志</p>
+                </header>
+
+                <div class="card console-card">
+                    <div class="console-toolbar">
+                        <button id="clearConsoleBtn" class="btn btn-secondary btn-sm">清空</button>
+                        <label class="auto-scroll-toggle">
+                            <input type="checkbox" id="autoScrollCheck" checked>
+                            <span>自动滚动</span>
+                        </label>
+                    </div>
+                    <div id="consoleOutput" class="console-output"></div>
+                </div>
+            </section>
+
+            <!-- About Tab -->
+            <section id="about" class="content-panel">
+                <header>
+                    <h2>关于 MindVoice</h2>
+                </header>
+
+                <div class="card about-card">
+                    <div class="app-logo-large">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                            <line x1="12" y1="19" x2="12" y2="23"></line>
+                            <line x1="8" y1="23" x2="16" y2="23"></line>
+                        </svg>
+                    </div>
+                    <h3>MindVoice</h3>
+                    <p class="version">Version 1.0.0</p>
+                    <p class="description">高效的语音转文字助手，由 Electron 与 Qwen3-ASR 技术驱动。</p>
+
+                    <div class="links">
+                        <a href="#" class="link-item">GitHub 仓库</a>
+                        <a href="#" class="link-item">报告问题</a>
+                        <a href="#" class="link-item">检查更新</a>
+                    </div>
+
+                    <div class="footer-note">
+                        Built with ❤️ using Electron
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="recorder.js"></script>
+    <script src="renderer.js"></script>
+</body>
+
+</html>
