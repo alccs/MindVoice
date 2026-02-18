@@ -13,6 +13,9 @@ build/
 # Models (large files)
 model/
 
+# Third-party libraries
+transformers-add-voxstral/
+
 # IDE
 .vscode/
 .idea/
