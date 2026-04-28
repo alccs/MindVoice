@@ -1,6 +1,6 @@
 {
   "name": "mindvoice",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Voice-to-text desktop app with global hotkey recording and AI transcription",
   "main": "main.js",
   "scripts": {
@@ -45,10 +45,21 @@
       "!model/**/*",
       "!transformers-add-voxstral/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "public/vad",
+        "to": "vad",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "lib/paste.vbs",
+        "to": "paste.vbs"
+      }
+    ],
     "win": {
       "target": [
         {
-          "target": "portable",
+          "target": "nsis",
           "arch": [
             "x64"
           ]
@@ -56,11 +67,26 @@
       ],
       "icon": "assets/icon.ico",
       "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MindVoice",
+      "include": "build/installer.nsh"
     }
   },
   "dependencies": {
+    "@ricky0123/vad-web": "^0.0.30",
     "electron-store": "^8.2.0",
     "form-data": "^4.0.5",
-    "iconv-lite": "^0.7.2"
+    "iconv-lite": "^0.7.2",
+    "onnxruntime-web": "^1.24.3"
   }
 }

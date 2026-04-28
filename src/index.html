@@ -63,6 +63,25 @@
                     <span>快捷键</span>
                 </button>
 
+                <button class="nav-item" data-tab="promptTab">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5"></path>
+                        <polyline points="17 3 21 7 17 11"></polyline>
+                        <line x1="16" y1="6" x2="21" y2="6"></line>
+                    </svg>
+                    <span>提示词</span>
+                </button>
+
+                <button class="nav-item" data-tab="historyTab">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <span>历史记录</span>
+                </button>
+
                 <button class="nav-item" data-tab="console">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -116,6 +135,21 @@
 
                     <div class="setting-row">
                         <div class="setting-info">
+                            <label for="autoLaunch">开机自启动</label>
+                            <div class="description">系统启动时自动运行 MindVoice</div>
+                        </div>
+                        <div class="setting-control">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="autoLaunch">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="separator"></div>
+
+                    <div class="setting-row">
+                        <div class="setting-info">
                             <label for="autoPaste">转录后自动粘贴</label>
                             <div class="description">转录完成后自动模拟 Ctrl+V 粘贴</div>
                         </div>
@@ -124,6 +158,41 @@
                                 <input type="checkbox" id="autoPaste">
                                 <span class="slider"></span>
                             </label>
+                        </div>
+                    </div>
+
+                    <div class="separator"></div>
+
+                    <div class="separator"></div>
+
+                    <div class="setting-group"
+                        style="background: var(--bg-modifier-hover); margin: 0 -20px; padding: 10px 20px; border-radius: 8px;">
+                        <div class="setting-row"
+                            style="padding-bottom: 10px; border-bottom: 1px solid var(--border-color); margin-bottom: 15px;">
+                            <div class="setting-info">
+                                <label for="autoStop">自动停止录音</label>
+                                <div class="description">停止说话后自动结束录音并转译</div>
+                            </div>
+                            <div class="setting-control">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="autoStop">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="setting-row" id="stopDelayGroup" style="padding-top: 5px;">
+                            <div class="setting-info"
+                                style="padding-left: 10px; border-left: 2px solid var(--accent-color);">
+                                <label for="stopDelay">自动停止倒数时间</label>
+                                <div class="description">静默几秒后判定整句话结束（0 = 说话结束后立即停止）</div>
+                            </div>
+                            <div class="setting-control">
+                                <div class="slider-container">
+                                    <input type="range" id="stopDelay" min="0" max="10" value="2" class="modern-slider">
+                                    <span id="stopDelayValue" class="slider-value">2</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -147,13 +216,54 @@
 
                     <div class="setting-row">
                         <div class="setting-info">
-                            <label for="prompt">识别提示词</label>
-                            <div class="description">帮助AI理解专业术语，如"二力杆"等，提高识别准确率</div>
+                            <label for="maxHistory">历史记录保存条数</label>
+                            <div class="description">最多在本地保存的语音转录历史记录数量</div>
                         </div>
-                        <div class="setting-control full-width">
-                            <textarea id="prompt" class="modern-textarea" rows="3"
-                                placeholder="例如：机械工程基础，二力杆，受力分析，力矩..."></textarea>
+                        <div class="setting-control">
+                            <div class="slider-container">
+                                <input type="range" id="maxHistory" min="10" max="200" value="50" step="10"
+                                    class="modern-slider">
+                                <span id="maxHistoryValue" class="slider-value">50</span>
+                            </div>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Prompt Tab -->
+            <section id="promptTab" class="content-panel">
+                <header>
+                    <h2>提示词设置</h2>
+                    <p class="subtitle">配置识别提示词，提高专业术语的识别准确率</p>
+                </header>
+
+                <div class="card">
+                    <div class="form-group">
+                        <label for="prompt">识别提示词</label>
+                        <textarea id="promptInput" class="modern-textarea" rows="8"
+                            placeholder="例如：机械工程基础，二力杆，受力分析"></textarea>
+                        <div class="hint-text">提示：用逗号分隔不同的专业术语，帮助AI更准确地识别特定领域的词汇</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- History Tab -->
+            <section id="historyTab" class="content-panel">
+                <header>
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <div>
+                            <h2>历史记录</h2>
+                            <p class="subtitle">查看并复制最近的语音转录结果</p>
+                        </div>
+                        <button id="clearHistoryBtn" class="btn btn-secondary btn-sm"
+                            style="margin-right: 20px;">清空记录</button>
+                    </div>
+                </header>
+
+                <div class="card history-card"
+                    style="padding: 0; background: transparent; border: none; box-shadow: none;">
+                    <div id="historyList" class="history-list">
+                        <!-- History items will be dynamically inserted here -->
                     </div>
                 </div>
             </section>
@@ -173,6 +283,7 @@
                             <option value="vllm">vLLM 服务 (外部)</option>
                             <option value="openai">OpenAI</option>
                             <option value="groq">Groq (推荐/速度快)</option>
+                            <option value="siliconflow">SiliconFlow (硅基流动)</option>
                             <option value="custom">自定义 (Custom)</option>
                         </select>
                     </div>
@@ -184,6 +295,21 @@
                             <option value="voxtral">Voxtral-Mini-4B-Realtime (实时, 4B参数)</option>
                         </select>
                         <div class="hint-text">切换模型后需要重启服务才能生效</div>
+                    </div>
+
+                    <div class="form-group" id="siliconFlowModelGroup" style="display: none;">
+                        <label for="siliconFlowModel">SiliconFlow 模型选择</label>
+                        <select id="siliconFlowModel" class="modern-select full-width">
+                            <option value="FunAudioLLM/SenseVoiceSmall">SenseVoiceSmall (多语种/快)</option>
+                            <option value="TeleAI/TeleSpeechASR">TeleSpeechASR</option>
+                            <option value="custom">自定义 (Custom)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="siliconFlowCustomGroup" style="display: none;">
+                        <label for="siliconFlowCustomModel">自定义 SiliconFlow 模型名称</label>
+                        <input type="text" id="siliconFlowCustomModel" placeholder="例如: vendor/model-name"
+                            class="modern-input">
                     </div>
 
                     <div class="form-group" id="vllmUrlGroup" style="display: none;">
@@ -307,6 +433,14 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.0/dist/ort.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.30/dist/bundle.min.js"></script>
+    <script>
+        // Check if VAD libraries are loaded
+        console.log('[HTML] Checking VAD libraries...');
+        console.log('[HTML] window.MicVAD available:', typeof window.MicVAD !== 'undefined');
+        console.log('[HTML] window.ort available:', typeof window.ort !== 'undefined');
+    </script>
     <script src="recorder.js"></script>
     <script src="renderer.js"></script>
 </body>

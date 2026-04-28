@@ -11,6 +11,8 @@ import json
 import tempfile
 import logging
 import subprocess
+import numpy as np
+import scipy.io.wavfile as wavfile
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from typing import Optional, Tuple
@@ -297,8 +299,6 @@ class VoxtralASRModel(ASRModel):
 
     def transcribe(self, audio_path: str, language: Optional[str] = None, prompt: Optional[str] = None) -> TranscriptionResult:
         audio_array = self._load_audio(audio_path)
-        
-        import torch
 
         try:
             audio_inputs = self.feature_extractor(
@@ -360,13 +360,9 @@ class VoxtralASRModel(ASRModel):
             return TranscriptionResult(text="", language="error")
 
     def _load_audio(self, audio_path: str):
-        import numpy as np
-        from scipy.io import wavfile
-
         sample_rate, audio_data = wavfile.read(audio_path)
         
         if sample_rate != 16000:
-            import subprocess
             temp_path = audio_path + ".resampled.wav"
             subprocess.run([
                 "ffmpeg", "-y", "-i", audio_path,

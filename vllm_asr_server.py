@@ -5,6 +5,15 @@ Using vLLM backend with Qwen3-ASR model
 Optimized for high throughput based on official documentation
 """
 import os
+
+# --- Fix NCCL "Broken pipe" error for single-GPU inference ---
+# Must be set BEFORE importing torch/vllm
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+os.environ.setdefault("NCCL_P2P_DISABLE", "1")
+os.environ.setdefault("NCCL_IB_DISABLE", "1")
+os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
+os.environ.setdefault("TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC", "300")
+os.environ.setdefault("TORCH_NCCL_ENABLE_MONITORING", "0")
 import io
 import time
 import tempfile
@@ -87,22 +96,63 @@ async def transcribe(
         
         wav_path = input_path + ".wav"
         
-        try:
-            import subprocess
-            t_convert_start = time.time()
-            subprocess.run([
-                "ffmpeg", "-y", "-i", input_path,
-                "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le",
-                wav_path
-            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            t_convert = time.time() - t_convert_start
-            
-            transcribe_path = wav_path
-            logger.info(f"Converting audio: {file.filename} -> WAV, language: {language or 'auto'}")
-        except Exception as e:
-            logger.warning(f"FFmpeg conversion failed: {e}")
-            transcribe_path = input_path
-            t_convert = 0
+        import subprocess
+        t_convert_start = time.time()
+        logger.info(f"Converting audio: {file.filename} -> WAV, language: {language or 'auto'}, size: {t_audio_size} bytes")
+        
+        # Validate minimum file size (a valid webm/ogg header is at least ~30 bytes)
+        if t_audio_size < 50:
+            raise RuntimeError(f"Audio data too small ({t_audio_size} bytes), likely empty or corrupt")
+        
+        # Try multiple conversion strategies
+        # Browser-generated webm can sometimes have malformed EBML headers
+        conversion_strategies = [
+            # Strategy 1: auto-detect (works most of the time)
+            ["-y", "-i", input_path],
+            # Strategy 2: force matroska demuxer (webm is a subset of matroska)
+            ["-y", "-f", "matroska", "-i", input_path],
+            # Strategy 3: explicit webm with opus codec
+            ["-y", "-f", "webm", "-acodec", "libopus", "-i", input_path],
+            # Strategy 4: force ogg demuxer (opus can also be in ogg container)
+            ["-y", "-f", "ogg", "-i", input_path],
+            # Strategy 5: pipe input bypasses filename-based format detection issues
+            "pipe",
+        ]
+        
+        output_args = ["-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wav_path]
+        last_error = ""
+        
+        for i, strategy_args in enumerate(conversion_strategies):
+            try:
+                if strategy_args == "pipe":
+                    # Pipe strategy: feed raw bytes via stdin, let ffmpeg probe the stream
+                    cmd = ["ffmpeg", "-y", "-i", "pipe:0"] + output_args
+                    with open(input_path, "rb") as f:
+                        result = subprocess.run(cmd, stdin=f, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                else:
+                    cmd = ["ffmpeg"] + strategy_args + output_args
+                    result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                
+                if result.returncode == 0 and os.path.exists(wav_path) and os.path.getsize(wav_path) > 44:
+                    if i > 0:
+                        logger.info(f"FFmpeg conversion succeeded with strategy {i+1}")
+                    break
+                else:
+                    stderr_msg = result.stderr.decode(errors="replace")[-200:] if result.stderr else ""
+                    logger.warning(f"FFmpeg strategy {i+1} failed (code {result.returncode}): {stderr_msg[-80:]}")
+                    last_error = stderr_msg
+                    # Clean up failed output
+                    if os.path.exists(wav_path):
+                        os.unlink(wav_path)
+            except Exception as e:
+                logger.warning(f"FFmpeg strategy {i+1} exception: {e}")
+                last_error = str(e)
+        else:
+            logger.error(f"FFmpeg conversion failed after all strategies. Last error: {last_error}")
+            raise RuntimeError(f"FFmpeg conversion failed: audio data may be corrupt or empty")
+        
+        t_convert = time.time() - t_convert_start
+        transcribe_path = wav_path
         
         try:
             t_inference_start = time.time()
@@ -142,6 +192,9 @@ async def transcribe(
 
 
 if __name__ == "__main__":
+    import signal
+    import sys
+
     print("=" * 50)
     print("  MindVoice ASR Server")
     print(f"  Model: {MODEL_PATH}")
@@ -150,5 +203,11 @@ if __name__ == "__main__":
     print(f"  Max Model Len: {MAX_MODEL_LEN}")
     print(f"  Port: {PORT}")
     print("=" * 50)
-    
+
+    def handle_sigterm(signum, frame):
+        logger.info("Received SIGTERM, shutting down gracefully...")
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, handle_sigterm)
+
     uvicorn.run(app, host="0.0.0.0", port=PORT)

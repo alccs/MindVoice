@@ -7,9 +7,15 @@ const messageText = document.getElementById('messageText');
 const canvas = document.getElementById('visualizer');
 const ctx = canvas.getContext('2d');
 
+// Icons
+const iconMic = document.getElementById('iconMicrophone');
+const iconSuccess = document.getElementById('iconSuccess');
+const iconError = document.getElementById('iconError');
+
 // --- State ---
 let currentState = 'idle';
-let audioData = new Array(32).fill(0);
+let targetAudioData = new Array(32).fill(0);
+let currentAudioData = new Array(32).fill(0);
 let displayedData = new Array(64).fill(0);
 let velocities = new Array(64).fill(0);
 let animationFrameId;
@@ -57,131 +63,125 @@ function drawVisualizer(timestamp) {
     phase += 0.08 * deltaTime;
     const timeSeconds = timestamp / 1000;
 
-    if (currentState === 'recording' || currentState === 'listening' || currentState === 'speaking') {
+    // --- Precalculate static math arrays (force rebuild on load) ---
+    if (!window.precalcDataV2) {
+        window.precalcDataV2 = true;
+        window.precalcData = null;
+    }
+    if (!window.precalcData) {
+        const totalBarsLocal = 64;
+        window.precalcData = new Array(totalBarsLocal);
+        const USEFUL_RATIO = 0.7;
+        for (let i = 0; i < totalBarsLocal; i++) {
+            const mirroredIndex = i < totalBarsLocal / 2 ? i : totalBarsLocal - 1 - i;
+            const normalizedPos = mirroredIndex / ((totalBarsLocal / 2) - 1);
+            const centerRatio = Math.pow(normalizedPos, 0.6);
+            const mappedRatio = (1 - normalizedPos) * USEFUL_RATIO;
+            const idleEnvelope = 0.5 + 0.5 * centerRatio;
+            window.precalcData[i] = {
+                mirroredIndex,
+                normalizedPos,
+                centerRatio,
+                mappedRatio,
+                idleEnvelope
+            };
+        }
+    }
+
+    // Active states for visualization
+    const isActiveState = (currentState === 'recording' || currentState === 'listening' || currentState === 'speaking' || currentState === 'loading');
+
+    if (isActiveState) {
+        if (!stateStartTime) stateStartTime = timestamp;
+
         const totalBars = 64;
         const gap = 2;
         const barWidth = Math.max(2, (width - (totalBars + 1) * gap) / totalBars);
 
         const isSpeaking = currentState === 'speaking';
+        const isLoading = currentState === 'loading';
         const timeSinceStart = timestamp - stateStartTime;
         const fadeInProgress = Math.min(1, timeSinceStart / 800);
 
+        // Interpolate current audio data
+        for (let j = 0; j < 32; j++) {
+            currentAudioData[j] = lerp(currentAudioData[j], targetAudioData[j], 15 * (deltaTime / 16.67) * 0.05);
+        }
+
         for (let i = 0; i < totalBars; i++) {
-            // Calculate mirrored index to create symmetry (0 -> 31 -> 0)
-            const mirroredIndex = i < totalBars / 2 ? i : totalBars - 1 - i;
-            // Normalize to 0..1 range properly
-            const normalizedPos = mirroredIndex / ((totalBars / 2) - 1); 
-            
-            // Non-linear curve for smoother center focus
-            // Increased power slightly to bring back "mountain" shape (1.2 instead of 0.7)
-            const centerRatio = Math.pow(normalizedPos, 1.2); 
+            const pData = window.precalcData[i];
+            const centerRatio = pData.centerRatio;
+            const mirroredIndex = pData.mirroredIndex;
 
             let targetValue = 0;
-            if (audioData && audioData.length > 0) {
-                // Map low frequencies (high energy) to center, high frequencies to edges
-                // audioData[0] is low freq, audioData[length-1] is high freq
-                // We want center (ratio 1) -> low freq (index 0)
-                // We want edge (ratio 0) -> high freq (index length-1)
-                
-                // Use a non-linear mapping to allocate more bars to low-mid frequencies
-                // (1 - centerRatio) maps 1->0. Power function creates better distribution
-                const freqIndexRatio = 1 - centerRatio; 
-                // Using power < 1 stretches low freqs across more bars
-                // Let's stick to 0.8 but rely on boostFactor for spread.
-                const mappedRatio = Math.pow(freqIndexRatio, 0.8); 
-                
-                const rawIndex = mappedRatio * (audioData.length - 1);
+
+            if (currentAudioData && currentAudioData.length > 0 && !isLoading) {
+                const mappedRatio = pData.mappedRatio;
+                const rawIndex = mappedRatio * (currentAudioData.length - 1);
                 const lowIndex = Math.floor(rawIndex);
-                const highIndex = Math.min(lowIndex + 1, audioData.length - 1);
+                const highIndex = Math.min(lowIndex + 1, currentAudioData.length - 1);
                 const t = rawIndex - lowIndex;
-                
-                const lowValue = audioData[lowIndex] || 0;
-                const highValue = audioData[highIndex] || 0;
+
+                const lowValue = currentAudioData[lowIndex] || 0;
+                const highValue = currentAudioData[highIndex] || 0;
                 let audioVal = lerp(lowValue, highValue, t);
 
-                // Enhance dynamics
                 audioVal = Math.pow(audioVal / 255, 0.8) * 255;
 
-                // Determine if we should visualize based on energy, even if VAD hasn't triggered "speaking" yet
-                // Calculate average volume roughly
                 let sum = 0;
-                for(let k=0; k<audioData.length; k++) sum += audioData[k];
-                const avgVol = sum / audioData.length;
+                for (let k = 0; k < currentAudioData.length; k++) sum += currentAudioData[k];
+                const avgVol = sum / currentAudioData.length;
                 const normalizedVol = avgVol / 255;
-                
-                // If volume is significant, treat as speaking for visualization purposes
-                // This fixes the issue where wave is flat when speaking but VAD is slightly delayed or state is 'listening'
-                const effectiveIsSpeaking = isSpeaking || normalizedVol > 0.05; // 5% threshold
 
-                // Stronger center boost, but much stronger edge support
-                // Drastically reduce boost when not speaking to avoid visualizing background noise
-                // Reduced centerBoost from 3.5 to 1.8 to avoid clipping/flat-top
-                // Reduced edgeBoost from 0.8 to 0.1 to restore "sides low" shape
-                const centerBoost = effectiveIsSpeaking ? 1.8 : 0.5; 
-                const edgeBoost = effectiveIsSpeaking ? 0.1 : 0.05;   
-                
+                const effectiveIsSpeaking = isSpeaking || normalizedVol > 0.05;
+                const centerBoost = effectiveIsSpeaking ? 1.5 : 0.6;
+                const edgeBoost = effectiveIsSpeaking ? 1.0 : 0.3;
                 const boostFactor = lerp(edgeBoost, centerBoost, centerRatio);
-                
+
                 targetValue = audioVal * boostFactor;
-                
-                // Removed floor logic that was artificially raising edges
-                // Add a very subtle floor only if needed, but mostly rely on idleWave
             }
 
-            // "Alive" idle wave - breathing effect
-            // Determine effective state for wave animation speed
-            // Use the already calculated normalizedVol if available, or recalc
+            // Idle wave animation
             let currentVol = 0;
-            if(audioData && audioData.length > 0) {
-                 let s = 0;
-                 for(let k=0; k<audioData.length; k++) s += audioData[k];
-                 currentVol = (s / audioData.length) / 255;
+            if (currentAudioData && currentAudioData.length > 0) {
+                let s = 0;
+                for (let k = 0; k < currentAudioData.length; k++) s += currentAudioData[k];
+                currentVol = (s / currentAudioData.length) / 255;
             }
             const waveEffectiveIsSpeaking = isSpeaking || currentVol > 0.05;
 
-            const waveSpeed = waveEffectiveIsSpeaking ? 8 : 2;
+            const waveSpeed = isLoading ? 4 : (waveEffectiveIsSpeaking ? 8 : 2);
             const waveOffset = mirroredIndex * 0.2 - phase * waveSpeed;
-            
-            // Dynamic envelope for idle wave to ensure center-high shape
-            // Reduced power to make idle wave wider too
-            const idleEnvelope = Math.pow(normalizedPos, 1.2); 
-            
-            // Reduced base amplitude for cleaner idle state
-            const baseAmplitude = waveEffectiveIsSpeaking ? 5 : 2;
-            // Reduced dynamic amplitude for idle state to be more subtle
-            const dynamicAmplitude = (waveEffectiveIsSpeaking ? 25 : 6) * idleEnvelope;
-            
-            // Complex wave composition for organic feel
+
+            const idleEnvelope = pData.idleEnvelope;
+            const baseAmplitude = isLoading ? 4 : (waveEffectiveIsSpeaking ? 5 : 2);
+            const dynamicAmplitude = isLoading ? 15 : (waveEffectiveIsSpeaking ? 25 : 6) * idleEnvelope;
+
             const wave1 = Math.sin(waveOffset) * dynamicAmplitude;
             const wave2 = Math.cos(waveOffset * 0.5 + timeSeconds) * (dynamicAmplitude * 0.5);
             const idleWave = (baseAmplitude + wave1 + wave2) * fadeInProgress;
 
-            // Add organic randomness (jitter) when speaking
-            if (waveEffectiveIsSpeaking) {
-                 const jitter = (Math.random() - 0.5) * 15 * centerRatio;
-                 targetValue += jitter;
+            if (waveEffectiveIsSpeaking && !isLoading) {
+                const jitter = (Math.random() - 0.5) * 6 * centerRatio;
+                targetValue += jitter;
             }
 
-            targetValue = Math.max(targetValue, idleWave);
-            
-            // Ensure bottom clamp and smoothing
-            targetValue = Math.max(4, targetValue);
+            targetValue = Math.max(4, targetValue, idleWave);
 
             // Physics simulation
             let springStrength, damping;
-            if (waveEffectiveIsSpeaking) {
-                springStrength = 0.4 * deltaTime; // Softer spring for more flow
-                damping = 0.65; // Less damping for more bounce
+            if (waveEffectiveIsSpeaking || isLoading) {
+                springStrength = 0.25 * deltaTime;
+                damping = 0.78;
             } else {
-                springStrength = 0.2 * deltaTime;
-                damping = 0.85;
+                springStrength = 0.15 * deltaTime;
+                damping = 0.88;
             }
-            
+
             const acceleration = (targetValue - displayedData[i]) * springStrength;
             velocities[i] = (velocities[i] + acceleration) * damping;
             displayedData[i] += velocities[i];
-            
-            // Prevent negative values
+
             if (displayedData[i] < 4) {
                 displayedData[i] = 4;
                 velocities[i] = 0;
@@ -189,16 +189,13 @@ function drawVisualizer(timestamp) {
 
             const value = displayedData[i];
 
-            // Layout calculation
+            // Draw bar
             const totalVisualizerWidth = totalBars * barWidth + (totalBars + 1) * gap;
             const startX = (width - totalVisualizerWidth) / 2;
             const x = startX + gap + i * (barWidth + gap);
 
-            // Draw rounded bar
             const maxBarHeight = height * 0.85;
             let percent = Math.min(1, value / 255);
-            
-            // Non-linear height scaling for dramatic effect
             percent = easeInOutQuad(percent);
 
             const barHeight = Math.max(4, percent * maxBarHeight);
@@ -206,29 +203,13 @@ function drawVisualizer(timestamp) {
             const halfHeight = barHeight / 2;
 
             ctx.fillStyle = '#000000';
-            
-            // Create gradient
-            if (height > 0) {
-                const gradient = ctx.createLinearGradient(0, centerY - maxBarHeight/2, 0, centerY + maxBarHeight/2);
-                // Dark gray to black gradient for sophisticated look
-                gradient.addColorStop(0, '#434343'); 
-                gradient.addColorStop(0.5, '#000000');
-                gradient.addColorStop(1, '#434343');
-                ctx.fillStyle = gradient;
-                
-                // Add soft shadow/glow
-                ctx.shadowBlur = 4;
-                ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
-            }
+            ctx.shadowBlur = 0;
+            ctx.shadowColor = "transparent";
 
-            ctx.beginPath();
-            
-            // Draw rounded rect
             const radius = Math.min(barWidth / 2, 4);
             const topY = centerY - halfHeight;
             const bottomY = centerY + halfHeight;
 
-            // Use roundRect if available for cleaner corners, fallback to manual path
             if (ctx.roundRect) {
                 ctx.beginPath();
                 ctx.roundRect(x, topY, barWidth, barHeight, radius);
@@ -247,34 +228,60 @@ function drawVisualizer(timestamp) {
                 ctx.fill();
             }
         }
-    }
 
-    animationFrameId = requestAnimationFrame(drawVisualizer);
+        animationFrameId = requestAnimationFrame(drawVisualizer);
+    } else {
+        animationFrameId = null;
+    }
 }
 
-drawVisualizer(0);
+// Do not immediately start drawVisualizer(0); it will be started on state switch if needed.
 
 ipcRenderer.on('show-message', (event, message, type) => {
     messageText.textContent = message;
 
     if (type && type !== currentState) {
         container.classList.remove(currentState);
+
+        // Remove old states
+        container.classList.remove('idle', 'recording', 'listening', 'speaking', 'processing', 'success', 'error', 'loading');
+
         currentState = type;
-        container.classList.add(currentState);
-        
+        if (currentState) {
+            container.classList.add(currentState);
+        }
+
         stateStartTime = performance.now();
-        
-        if (type !== 'recording' && type !== 'listening' && type !== 'speaking') {
+
+        // Icon Switching Logic
+        iconMic.style.display = 'none';
+        iconSuccess.style.display = 'none';
+        iconError.style.display = 'none';
+
+        if (type === 'success') {
+            iconSuccess.style.display = 'block';
+        } else if (type === 'error') {
+            iconError.style.display = 'block';
+        } else {
+            iconMic.style.display = 'block';
+        }
+
+        const isActiveState = (type === 'recording' || type === 'listening' || type === 'speaking' || type === 'loading');
+        if (!isActiveState) {
             for (let i = 0; i < displayedData.length; i++) {
                 displayedData[i] = 0;
                 velocities[i] = 0;
             }
+        } else if (!animationFrameId) {
+            // Restart drawing loop if we transitioned back into an active state
+            lastTime = 0;
+            animationFrameId = requestAnimationFrame(drawVisualizer);
         }
     }
 });
 
 ipcRenderer.on('audio-data', (event, data) => {
     if (data && data.length > 0) {
-        audioData = data;
+        targetAudioData = data;
     }
 });

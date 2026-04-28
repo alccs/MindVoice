@@ -10,7 +10,7 @@ if (process.platform === 'win32') {
     } catch (e) {
         try {
             require('child_process').spawn('chcp', ['65001'], { stdio: 'ignore' });
-        } catch (e2) {}
+        } catch (e2) { }
     }
 }
 
@@ -19,7 +19,6 @@ process.env.NODE_ENV = 'production';
 const store = require('./lib/store');
 const HotkeyManager = require('./lib/hotkey-manager');
 const TrayManager = require('./lib/tray-manager');
-const APIService = require('./lib/api-service');
 const { pasteText } = require('./lib/clipboard-paste');
 
 let settingsWindow = null;
@@ -28,6 +27,8 @@ let hotkeyManager = null;
 let trayManager = null;
 let localServerProcess = null;
 let vllmServerProcess = null;
+let vllmShuttingDown = false;
+let hideOverlayTimeout = null;
 
 function sendToConsole(source, message, type = 'info') {
     const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false });
@@ -115,8 +116,8 @@ function createSettingsWindow() {
  */
 function createOverlayWindow() {
     overlayWindow = new BrowserWindow({
-        width: 340, // Match CSS width
-        height: 80, // Match CSS height
+        width: 400, // Match CSS width + shadow padding
+        height: 140, // Match CSS height + shadow padding
         transparent: true,
         frame: false,
         alwaysOnTop: true,
@@ -165,6 +166,7 @@ function initializeApp() {
 }
 
 async function startLocalServer() {
+    const APIService = require('./lib/api-service');
     const isOnline = await APIService.checkLocalServer();
     if (isOnline) {
         console.log('[MindVoice] Local server already running');
@@ -190,7 +192,7 @@ async function startLocalServer() {
     console.log('[MindVoice] Configured Python Path:', pythonPath);
     console.log('[MindVoice] exe path:', process.execPath);
     console.log('[MindVoice] exe dir:', path.dirname(process.execPath));
-    
+
     const fs = require('fs');
     const modelDir = path.join(path.dirname(process.execPath), 'model');
     console.log('[MindVoice] Model dir (exe side):', modelDir);
@@ -215,7 +217,7 @@ async function startLocalServer() {
             LANG: 'zh_CN.UTF-8',
             LC_ALL: 'zh_CN.UTF-8'
         };
-        
+
         localServerProcess = spawn(pythonPath, ['-u', scriptPath], {
             cwd: __dirname,
             stdio: ['ignore', 'pipe', 'pipe'],
@@ -256,6 +258,7 @@ async function startLocalServer() {
             return false;
         }
         await new Promise(r => setTimeout(r, 1000));
+        const APIService = require('./lib/api-service');
         const ready = await APIService.checkLocalServer();
         if (ready) {
             console.log('[MindVoice] Local server started successfully');
@@ -272,14 +275,18 @@ async function startLocalServer() {
 function killProcessTree(pid) {
     if (!pid) return;
     try {
-        const { execSync } = require('child_process');
-        execSync(`taskkill /pid ${pid} /f /t`);
-        console.log(`[MindVoice] Killed process tree: ${pid}`);
+        const { exec } = require('child_process');
+        exec(`taskkill /pid ${pid} /f /t`, (error, stdout, stderr) => {
+            if (error) {
+                if (!error.message.includes('not found')) {
+                    console.error(`[MindVoice] Failed to kill process ${pid}:`, error.message);
+                }
+            } else {
+                console.log(`[MindVoice] Killed process tree: ${pid}`);
+            }
+        });
     } catch (e) {
-        // Ignore "process not found" errors
-        if (!e.message.includes('not found')) {
-            console.error(`[MindVoice] Failed to kill process ${pid}:`, e.message);
-        }
+        console.error(`[MindVoice] Exception killing process ${pid}:`, e.message);
     }
 }
 
@@ -294,6 +301,7 @@ function stopLocalServer() {
 async function startVllmServer() {
     let vllmUrl = store.get('vllmUrl') || 'http://localhost:8000';
 
+    const APIService = require('./lib/api-service');
     const isOnline = await APIService.checkVllmServer(vllmUrl);
     if (isOnline) {
         console.log(`[MindVoice] vLLM server already running at ${vllmUrl}`);
@@ -333,6 +341,14 @@ async function startVllmServer() {
 
     vllmServerProcess.stderr.on('data', (data) => {
         const msg = data.toString('utf8').trim();
+        if (!msg) return;
+        // Filter out NCCL heartbeat "Broken pipe" spam during shutdown
+        if (vllmShuttingDown && (
+            msg.includes('Broken pipe') ||
+            msg.includes('ProcessGroupNCCL') ||
+            msg.includes('TCPStore') ||
+            msg.includes('sendBytes failed')
+        )) return;
         originalConsoleLog(`[VllmServer] ${msg}`);
         sendToConsole('VllmServer', msg, 'info');
     });
@@ -354,6 +370,7 @@ async function startVllmServer() {
         }
         await new Promise(r => setTimeout(r, 1000));
 
+        const APIService = require('./lib/api-service');
         let ready = await APIService.checkVllmServer(vllmUrl);
         if (ready) {
             console.log('[MindVoice] vLLM server started successfully');
@@ -375,8 +392,21 @@ async function startVllmServer() {
 function stopVllmServer() {
     if (vllmServerProcess) {
         console.log('[MindVoice] Stopping vLLM server...');
-        killProcessTree(vllmServerProcess.pid);
-        vllmServerProcess = null;
+        vllmShuttingDown = true;
+        // Send SIGTERM via WSL first for graceful PyTorch cleanup
+        try {
+            const { exec } = require('child_process');
+            const pid = vllmServerProcess.pid;
+            exec(`wsl kill -TERM $(wsl ps --ppid $(wsl cat /proc/$(wsl ps -o pid= --ppid 1 | tail -1)/task/*/children 2>/dev/null | tr '\n' ' ') -o pid= 2>/dev/null | tr '\n' ' ') 2>/dev/null; wsl kill -TERM $(wsl ps -eo pid,args | grep vllm_asr_server | grep -v grep | awk '{print $1}') 2>/dev/null`);
+        } catch (e) { /* best effort */ }
+        // Give 2s for graceful shutdown, then force kill
+        setTimeout(() => {
+            if (vllmServerProcess) {
+                killProcessTree(vllmServerProcess.pid);
+                vllmServerProcess = null;
+            }
+            vllmShuttingDown = false;
+        }, 2000);
     }
 }
 
@@ -403,13 +433,19 @@ function handleHotkeyPress(isRecording) {
  * Show overlay window at bottom center
  */
 function showOverlay() {
+    // Clear any pending hide timeout
+    if (hideOverlayTimeout) {
+        clearTimeout(hideOverlayTimeout);
+        hideOverlayTimeout = null;
+    }
+
     const { screen } = require('electron');
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width, height } = primaryDisplay.workAreaSize;
 
     overlayWindow.setPosition(
-        Math.floor((width - 340) / 2),
-        height - 120
+        Math.floor((width - 400) / 2),
+        height - 150
     );
     overlayWindow.show();
 }
@@ -430,6 +466,47 @@ function showNotification(title, body) {
     }
 }
 
+// ============ Anti-Hallucination Filter ============
+
+/**
+ * Check if transcription result is just the prompt being hallucinated
+ * Whisper-based models tend to repeat the prompt when audio has no real speech
+ */
+function isPromptHallucination(result, prompt) {
+    // Normalize: remove all punctuation, whitespace, and convert to lowercase
+    const normalize = (s) => s.replace(/[\s,，。.、；;：:！!？?""''「」【】\-—…·]/g, '').toLowerCase();
+
+    const normResult = normalize(result);
+    const normPrompt = normalize(prompt);
+
+    if (!normResult || !normPrompt) return false;
+
+    // A hallucination usually means the model outputs the EXACT prompt
+    // or a significant contiguous chunk of it when there is no speech.
+
+    // 1. Exact match
+    if (normResult === normPrompt) return true;
+
+    // 2. The result is a very large substring of the prompt (e.g., missed the first word)
+    // ONLY if the result is long enough to be significant (e.g., > 5 chars)
+    if (normResult.length > 5 && normPrompt.includes(normResult)) {
+        // If the result is almost the entire prompt (e.g., > 80% of the prompt length)
+        if (normResult.length > normPrompt.length * 0.8) {
+            return true;
+        }
+    }
+
+    // 3. The prompt is a large substring of the result (e.g. repeated prompt)
+    if (normPrompt.length > 5 && normResult.includes(normPrompt)) {
+        // If the prompt makes up most of the result
+        if (normPrompt.length > normResult.length * 0.8) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // ============ IPC Handlers ============
 
 ipcMain.handle('get-settings', () => {
@@ -443,6 +520,19 @@ ipcMain.handle('save-setting', (event, key, value) => {
         hotkeyManager.register(value, handleHotkeyPress);
     }
 
+    // Trim history if maxHistory setting was reduced and history size currently exceeds it
+    if (key === 'maxHistory') {
+        const currentHistory = store.get('history') || [];
+        const limit = parseInt(value, 10) || 50;
+        if (currentHistory.length > limit) {
+            const shortenedHistory = currentHistory.slice(currentHistory.length - limit);
+            store.set('history', shortenedHistory);
+            if (settingsWindow && !settingsWindow.isDestroyed()) {
+                settingsWindow.webContents.send('history-updated', shortenedHistory);
+            }
+        }
+    }
+
     trayManager.updateMenu();
 
     return true;
@@ -450,13 +540,13 @@ ipcMain.handle('save-setting', (event, key, value) => {
 
 ipcMain.handle('restart-server', async (event, provider) => {
     console.log(`[MindVoice] Switching to provider: ${provider}`);
-    
+
     stopLocalServer();
     stopVllmServer();
-    
+
     console.log('[MindVoice] All local servers stopped, waiting for port release...');
     await new Promise(r => setTimeout(r, 1500));
-    
+
     if (provider === 'local') {
         console.log('[MindVoice] Starting local server...');
         return await startLocalServer();
@@ -464,6 +554,29 @@ ipcMain.handle('restart-server', async (event, provider) => {
         console.log('[MindVoice] Starting vLLM server...');
         return await startVllmServer();
     }
+    return true;
+});
+
+ipcMain.handle('get-auto-launch', () => {
+    const settings = app.getLoginItemSettings({
+        path: app.isPackaged ? undefined : process.execPath
+    });
+    return settings.openAtLogin;
+});
+
+ipcMain.handle('set-auto-launch', (event, enabled) => {
+    const options = { 
+        openAtLogin: enabled,
+        openAsHidden: false,
+        name: 'MindVoice'
+    };
+    if (!app.isPackaged) {
+        options.path = process.execPath;
+        options.args = [app.getAppPath()];
+    }
+    const result = app.setLoginItemSettings(options);
+    store.set('autoLaunch', enabled);
+    console.log(`[MindVoice] Auto-launch ${enabled ? 'enabled' : 'disabled'} (Packaged: ${app.isPackaged}, result: ${JSON.stringify(result)})`);
     return true;
 });
 
@@ -475,9 +588,12 @@ ipcMain.handle('test-connection', async () => {
             baseUrl: store.get('baseUrl'),
             model: store.get('model'),
             language: store.get('language'),
-            vllmUrl: store.get('vllmUrl')
+            vllmUrl: store.get('vllmUrl'),
+            siliconFlowModel: store.get('siliconFlowModel'),
+            prompt: store.get('prompt')
         };
 
+        const APIService = require('./lib/api-service');
         const apiService = new APIService(config);
         const success = await apiService.testConnection();
 
@@ -487,7 +603,22 @@ ipcMain.handle('test-connection', async () => {
     }
 });
 
+ipcMain.handle('get-history', () => {
+    return store.get('history') || [];
+});
+
+ipcMain.handle('clear-history', () => {
+    store.set('history', []);
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+        settingsWindow.webContents.send('history-updated', []);
+    }
+    return true;
+});
+
 ipcMain.on('stop-recording', async (event, audioData) => {
+    // 无论是手动按键停止还是 VAD 自动停止，都要重置快捷键状态
+    hotkeyManager.resetState();
+
     try {
         console.log(`[MindVoice] Received audio data (base64), length: ${audioData ? audioData.length : 0} chars`);
         overlayWindow.webContents.send('show-message', 'Transcribing...', 'processing');
@@ -500,6 +631,7 @@ ipcMain.on('stop-recording', async (event, audioData) => {
         }
 
         const apiProvider = store.get('apiProvider');
+        const APIService = require('./lib/api-service');
 
         if (apiProvider === 'local') {
             let isServerOnline = await APIService.checkLocalServer();
@@ -528,36 +660,74 @@ ipcMain.on('stop-recording', async (event, audioData) => {
             baseUrl: store.get('baseUrl'),
             model: store.get('model'),
             language: store.get('language'),
-            vllmUrl: store.get('vllmUrl')
+            vllmUrl: store.get('vllmUrl'),
+            siliconFlowModel: store.get('siliconFlowModel'),
+            prompt: store.get('prompt')
         };
 
         const apiService = new APIService(config);
-        const text = await apiService.transcribe(buffer, 'audio.webm');
+        const startTime = Date.now();
+        const text = await apiService.transcribe(buffer, 'audio.wav');
+        const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+        console.log(`[MindVoice] Transcription completed in ${duration}s`);
 
         if (!text) {
             throw new Error('No transcription result');
         }
 
+        // Anti-hallucination filter: detect if ASR just repeated the prompt
+        const promptText = store.get('prompt') || '';
+        if (promptText && isPromptHallucination(text, promptText)) {
+            console.log(`[MindVoice] Hallucination detected: result "${text}" matches prompt, treating as no-speech`);
+            overlayWindow.webContents.send('show-message', '— No speech detected', 'idle');
+            hotkeyManager.resetState();
+            hideOverlayTimeout = setTimeout(hideOverlay, 2000);
+            return;
+        }
+
         // Save last transcript
         store.set('lastTranscript', text);
 
-        // Paste or copy
-        const autoPaste = store.get('autoPaste');
-        if (autoPaste) {
-            const pasted = await pasteText(text);
+        // Add to history
+        const currentHistory = store.get('history') || [];
+        const maxHistory = parseInt(store.get('maxHistory'), 10) || 50;
 
-            if (pasted) {
-                overlayWindow.webContents.send('show-message', `✓ ${text.substring(0, 30)}...`, 'success');
-            } else {
-                overlayWindow.webContents.send('show-message', '✓ Copied to clipboard', 'success');
-            }
-        } else {
-            require('electron').clipboard.writeText(text);
-            overlayWindow.webContents.send('show-message', '✓ Copied to clipboard', 'success');
+        currentHistory.push({
+            timestamp: new Date().getTime(),
+            text: text
+        });
+
+        // Trim history array to max size keeping the newest entries at the end
+        if (currentHistory.length > maxHistory) {
+            currentHistory.splice(0, currentHistory.length - maxHistory);
         }
 
-        // Auto-hide overlay after 3 seconds
-        setTimeout(hideOverlay, 3000);
+        store.set('history', currentHistory);
+
+        // Notify UI about history update
+        if (settingsWindow && !settingsWindow.isDestroyed()) {
+            settingsWindow.webContents.send('history-updated', currentHistory);
+        }
+
+        // Paste or copy
+        const autoPaste = store.get('autoPaste');
+        const displayText = `${text.substring(0, 30)}${text.length > 30 ? '...' : ''}`;
+
+        // Hide overlay BEFORE paste to ensure focus returns to target window
+        hideOverlay();
+
+        if (autoPaste) {
+            // Give focus a moment to return to target window
+            await new Promise(r => setTimeout(r, 100));
+            const pasted = await pasteText(text);
+        } else {
+            require('electron').clipboard.writeText(text);
+        }
+
+        // Re-show overlay briefly to display result, then auto-hide
+        overlayWindow.webContents.send('show-message', displayText, 'success');
+        showOverlay();
+        hideOverlayTimeout = setTimeout(hideOverlay, 1500);
 
         trayManager.setState('idle');
         hotkeyManager.resetState(); // Reset so next Alt+Space starts fresh
@@ -565,7 +735,7 @@ ipcMain.on('stop-recording', async (event, audioData) => {
         console.error('Transcription error:', error);
 
         overlayWindow.webContents.send('show-message', `✗ ${error.message}`, 'error');
-        setTimeout(hideOverlay, 5000);
+        hideOverlayTimeout = setTimeout(hideOverlay, 5000);
 
         trayManager.setState('error');
         showNotification('Transcription Failed', error.message);
@@ -577,25 +747,35 @@ ipcMain.on('stop-recording', async (event, audioData) => {
 
 // Voice activity state from renderer's VAD
 ipcMain.on('voice-activity', (event, state) => {
-    if (state === 'listening') {
+    console.log(`[MindVoice] Voice activity: ${state}`);
+    
+    if (state === 'loading') {
+        overlayWindow.webContents.send('show-message', 'Loading VAD...', 'loading');
+        showOverlay();
+    } else if (state === 'listening') {
         overlayWindow.webContents.send('show-message', 'Listening...', 'recording');
         showOverlay();
     } else if (state === 'speaking') {
         overlayWindow.webContents.send('show-message', 'Speaking...', 'recording');
+    } else if (state === 'silence') {
+        overlayWindow.webContents.send('show-message', 'Processing...', 'idle');
+    } else if (state.startsWith('silence:')) {
+        const sec = state.split(':')[1];
+        overlayWindow.webContents.send('show-message', `自动停止 ${sec}s`, 'recording');
     } else if (state === 'no-speech') {
         overlayWindow.webContents.send('show-message', '— No speech detected', 'idle');
         hotkeyManager.resetState();
-        setTimeout(hideOverlay, 2000);
+        hideOverlayTimeout = setTimeout(hideOverlay, 2000);
     } else if (state === 'error') {
         overlayWindow.webContents.send('show-message', 'Microphone error', 'error');
         hotkeyManager.resetState();
-        setTimeout(hideOverlay, 3000);
+        hideOverlayTimeout = setTimeout(hideOverlay, 3000);
     } else if (state.startsWith('countdown:')) {
         const sec = state.split(':')[1];
-        overlayWindow.webContents.send('show-message', `⏸ Silence... ${sec}s`, 'processing');
+        overlayWindow.webContents.send('show-message', `自动停止倒计时 ${sec}s`, 'recording');
     } else if (state.startsWith('waiting:')) {
         const sec = state.split(':')[1];
-        overlayWindow.webContents.send('show-message', `Waiting... ${sec}s`, 'recording');
+        overlayWindow.webContents.send('show-message', `等待语音 ${sec}s`, 'recording');
     }
 });
 

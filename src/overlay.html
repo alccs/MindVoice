@@ -27,62 +27,103 @@
 
         .overlay-container {
             position: relative;
+            /* 原尺寸: 340x80 */
             width: 340px;
             height: 80px;
             pointer-events: auto;
 
-            background: rgba(255, 255, 255, 0.75);
-            backdrop-filter: blur(40px) saturate(200%) contrast(1.1);
-            -webkit-backdrop-filter: blur(40px) saturate(200%) contrast(1.1);
-            filter: saturate(1.1);
+            /* 精致磨砂玻璃效果：半透明白色磨砂质感 + 强光学模糊 */
+            background: linear-gradient(135deg,
+                    rgba(255, 255, 255, 0.45) 0%,
+                    rgba(255, 255, 255, 0.2) 100%);
+            backdrop-filter: blur(40px) saturate(180%) brightness(105%);
+            -webkit-backdrop-filter: blur(40px) saturate(180%) brightness(105%);
 
-            border-radius: 24px;
-            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 40px;
+            /* 锐利的玻璃切边和强烈的高光反射 */
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-top: 1px solid rgba(255, 255, 255, 0.9);
+            border-left: 1px solid rgba(255, 255, 255, 0.5);
+            /* 多层重影产生立体流动感，加深外部投影让透明层悬浮 */
             box-shadow:
-                0 4px 15px rgba(0, 0, 0, 0.06),
-                0 1px 4px rgba(0, 0, 0, 0.03);
+                inset 0 1px 1px rgba(255, 255, 255, 1),
+                inset 0 -1px 3px rgba(255, 255, 255, 0.1),
+                0 15px 45px rgba(0, 0, 0, 0.25),
+                0 4px 15px rgba(0, 0, 0, 0.1);
 
             display: flex;
-            flex-direction: column;
-            padding: 12px 20px;
-            gap: 4px;
+            align-items: center;
+            justify-content: center;
+            /* 默认居中所有内容 */
+            overflow: hidden;
+            /* 收缩时切掉外部 */
 
-            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            /* 采用特定的属性过渡避免 transition: all 导致每一帧重新计算所有的属性 (如 backdrop-filter) 从而掉帧 */
+            transition:
+                width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                border-radius 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                background 0.4s ease,
+                box-shadow 0.4s ease,
+                border-color 0.4s ease;
+
+            /* 强制开启 GPU 硬件加速，极大地提高动画和模糊效果的流畅度 */
+            will-change: width, height, border-radius, transform, background;
         }
 
-        /* Top Row: Icon + Text */
+        /* 内部内容区域层：文字+图标 */
+        .content-layer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 340px;
+            /* 固定原始内部宽度，防止变形 */
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 20px;
+            z-index: 10;
+            pointer-events: none;
+            transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            will-change: opacity, transform;
+            box-sizing: border-box;
+        }
+
         .header-row {
             display: flex;
             align-items: center;
             gap: 10px;
             width: 100%;
-            height: 100%;
-            /* Fill container */
-            position: relative;
-            z-index: 10;
-            /* Above visualizer */
-            pointer-events: none;
-            /* Let clicks pass through if needed, but text selection blocked by user-select:none anyway */
-            top: -20px;
-            /* Move up slightly */
+            transform: translateY(-8px);
+            /* 给底部波形留点空间 */
+            transition: transform 0.4s ease;
         }
 
         .app-icon {
-            width: 28px;
-            height: 28px;
+            width: 32px;
+            height: 32px;
             background: linear-gradient(135deg, #ff4d4d, #f9cb28);
-            border-radius: 8px;
+            border-radius: 50%;
+            /* 变成纯圆的图标，适应小圆圈 */
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             box-shadow: 0 2px 8px rgba(255, 77, 77, 0.3);
+            flex-shrink: 0;
+            position: relative;
+            z-index: 20;
+            /* 确保图标能在缩小后看到 */
+            transition: all 0.4s ease;
         }
 
         .app-icon svg {
             width: 16px;
             height: 16px;
             fill: currentColor;
+            transition: transform 0.3s ease;
+            will-change: transform;
         }
 
         .text-content {
@@ -90,83 +131,272 @@
             flex-direction: column;
             justify-content: center;
             line-height: 1.2;
+            flex-grow: 1;
+            /* 处理时渐隐文字 */
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            transform-origin: left center;
         }
 
         .app-name {
             font-size: 14px;
             font-weight: 700;
-            color: #333;
+            color: #1a1a1a;
             letter-spacing: -0.3px;
         }
 
         .status-text {
             font-size: 11px;
-            font-weight: 500;
-            color: #888;
+            font-weight: 600;
+            color: #555;
             letter-spacing: 0.2px;
             white-space: nowrap;
-            max-width: 180px;
+            max-width: 200px;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
-        /* Visualizer: Absolute & Centered */
+        /* Canvas波形层 */
         .visualizer-row {
             position: absolute;
-            top: 15px;
-            /* Move down slightly */
+            bottom: 6px;
             left: 0;
-            width: 100%;
-            height: 100%;
+            width: 340px;
+            /* 固定宽 */
+            height: 45px;
             z-index: 1;
-            /* Behind text */
             pointer-events: none;
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: opacity 0.3s ease;
+            will-change: opacity;
         }
 
         canvas {
             width: 100%;
             height: 100%;
-            /* Opacity can be controlled here or in JS */
         }
 
-        /* States via classes on container */
+        /* 圆圈旋转边框层 (加载转圈) */
+        .processing-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 50px;
+            height: 50px;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 3px solid transparent;
+            border-top-color: #3b82f6;
+            border-right-color: rgba(59, 130, 246, 0.3);
+            z-index: 5;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+        }
+
+        @keyframes ringSpin {
+            0% {
+                transform: translate(-50%, -50%) rotate(0deg);
+            }
+
+            100% {
+                transform: translate(-50%, -50%) rotate(360deg);
+            }
+        }
+
+        /* ================= 状态 ================= */
         .overlay-container.recording .status-text {
-            color: #ef4444;
-            /* Red text for recording */
+            color: #dc2626;
         }
 
-        .overlay-container.processing .status-text {
-            color: #f59e0b;
+        .overlay-container.listening .status-text {
+            color: #3b82f6;
+        }
+
+        .overlay-container.speaking .status-text {
+            color: #dc2626;
+        }
+
+        .overlay-container.loading .status-text {
+            color: #3b82f6;
+        }
+
+        .overlay-container.error .status-text {
+            color: #dc2626;
+        }
+
+        /* ---------------- Loading 状态 (VAD初始化中) ---------------- */
+        .overlay-container.loading .status-text {
+            color: #3b82f6;
+        }
+
+        .overlay-container.loading .app-icon {
+            background: linear-gradient(135deg, #60a5fa, #2563eb);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* ---------------- Processing 魔法小圆圈状态 ---------------- */
+        .overlay-container.processing {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            /* 处理状态延续高通透度，但有稍强的中央光效 */
+            background: linear-gradient(135deg,
+                    rgba(255, 255, 255, 0.2) 0%,
+                    rgba(255, 255, 255, 0.05) 100%);
+            box-shadow:
+                inset 0 1px 2px rgba(255, 255, 255, 1),
+                inset 0 0 15px rgba(59, 130, 246, 0.1),
+                0 15px 45px rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .overlay-container.processing .content-layer {
+            /* 居中图标 */
+            justify-content: center;
+            padding: 0;
+            /* 左移抵消原来的 padding-left 带来的偏移，让图标完美居中在60x60里面 */
+            transform: translateX(0);
+        }
+
+        .overlay-container.processing .header-row {
+            transform: translateY(0);
+            /* 取消上移，让图标居中 */
+            justify-content: center;
+            margin: 0;
+        }
+
+        .overlay-container.processing .text-content {
+            opacity: 0;
+            /* 隐藏文字 */
+            transform: scale(0.8);
+            pointer-events: none;
+            position: absolute;
+            /* 防止占据空间 */
+        }
+
+        .overlay-container.processing .app-icon {
+            /* 图标可以在处理时稍微跳动或者发光 */
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+            background: linear-gradient(135deg, #60a5fa, #2563eb);
+            /* 将图标居中在这60px空间里 */
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .overlay-container.processing .visualizer-row {
+            opacity: 0;
+            /* 隐藏波形 */
+        }
+
+        .overlay-container.processing .processing-ring {
+            opacity: 1;
+            /* 显示进度圈 */
+            animation: ringSpin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        /* ---------------- Error/Success 等静态恢复状态 ---------------- */
+        .overlay-container.idle,
+        .overlay-container.success,
+        .overlay-container.error {
+            /* 收起波形，居中文字 */
+            min-height: 60px;
+            height: 60px;
+        }
+
+        .overlay-container.idle .header-row,
+        .overlay-container.success .header-row,
+        .overlay-container.error .header-row {
+            transform: translateY(0);
+            /* 居中 */
+        }
+
+        .overlay-container.idle .visualizer-row,
+        .overlay-container.success .visualizer-row,
+        .overlay-container.error .visualizer-row {
+            opacity: 0;
+            /* 结束录音时不显示波形 */
+        }
+
+        .overlay-container.success {
+            border-color: rgba(74, 222, 128, 0.5);
+            box-shadow:
+                inset 0 1px 2px rgba(255, 255, 255, 0.9),
+                0 10px 40px rgba(22, 163, 74, 0.15);
+        }
+
+        .overlay-container.success .status-text {
+            color: #16a34a;
+            font-weight: 600;
+        }
+
+        .overlay-container.success .app-icon {
+            background: linear-gradient(135deg, #4ade80, #16a34a);
         }
 
         .overlay-container.error {
-            border-color: rgba(239, 68, 68, 0.3);
-            background: rgba(255, 245, 245, 0.9);
+            border-color: rgba(248, 113, 113, 0.5);
+            box-shadow:
+                inset 0 1px 2px rgba(255, 255, 255, 0.9),
+                0 10px 40px rgba(220, 38, 38, 0.15);
+        }
+
+        .overlay-container.error .status-text {
+            color: #dc2626;
+        }
+
+        .overlay-container.error .app-icon {
+            background: linear-gradient(135deg, #ef4444, #b91c1c);
         }
     </style>
 </head>
 
 <body>
-    <div class="overlay-container" id="container">
-        <div class="header-row">
-            <div class="app-icon">
-                <svg viewBox="0 0 24 24">
-                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                    <line x1="12" y1="19" x2="12" y2="22"></line>
-                </svg>
-            </div>
-            <div class="text-content">
-                <span class="app-name">MindVoice</span>
-                <span class="status-text" id="messageText">Ready</span>
+    <div class="overlay-container idle" id="container">
+        <!-- 基础内容层 -->
+        <div class="content-layer">
+            <div class="header-row">
+                <div class="app-icon" id="appIcon">
+                    <!-- 默认麦克风图标 -->
+                    <svg id="iconMicrophone" viewBox="0 0 24 24">
+                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="22"></line>
+                    </svg>
+                    <!-- 成功打勾图标 (隐藏) -->
+                    <svg id="iconSuccess" viewBox="0 0 24 24"
+                        style="display: none; width: 18px; height: 18px; stroke: white; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; fill: none;">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    <!-- 错误叉号图标 (隐藏) -->
+                    <svg id="iconError" viewBox="0 0 24 24"
+                        style="display: none; width: 18px; height: 18px; stroke: white; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; fill: none;">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </div>
+                <div class="text-content">
+                    <span class="app-name">MindVoice</span>
+                    <span class="status-text" id="messageText">Ready</span>
+                </div>
             </div>
         </div>
+
+        <!-- Canvas 波形层 -->
         <div class="visualizer-row">
-            <canvas id="visualizer"></canvas>
+            <canvas id="visualizer" width="340" height="45"></canvas>
         </div>
+
+        <!-- 转圈进度层 -->
+        <div class="processing-ring"></div>
     </div>
 
     <script src="overlay.js"></script>
